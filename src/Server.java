@@ -1,10 +1,16 @@
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Random;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -16,18 +22,18 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
-
 public class Server {
 	
 	static Document baseDoc;
-
 	
-	// localhost:8000/sendPoints?points=p
+	
+	// localhost:8000/sendPoints?points=1,2,3,4&nick=maxmuster&gameId=jlrnv
+	// localhost:8000/createGame
 	public static void main(String[] args) throws Exception {
 		baseDoc = Jsoup.parse(new File("base.html"),"UTF-8");
 		
         HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
-        HttpContext context = server.createContext("/sendPoints", new MyHandler());
+        HttpContext context = server.createContext("/sendPoints", new PointHandler());
 
         File imgDir = new File("./images");
         for (String filename : imgDir.list())
@@ -39,36 +45,147 @@ public class Server {
         		server.createContext("/"+filename, new ImageHandler(filename));
         	}
         }
+        
+        server.createContext("/createGame", new GameCreateHandler());
+        
         server.setExecutor(null);
         context.getFilters().add(new ParameterFilter());
         System.out.println("Server Running.");
         server.start();
     }
+	
+	static GameStats loadGame(String gameId)
+	{
+		File gameDir = new File("./games/"+gameId);
+    	if (!gameDir.isDirectory())
+    	{
+    		System.out.println("Couldn't find game "+gameId);
+    		return null;
+    	}
 
-    static class MyHandler implements HttpHandler {
+		LinkedList<NamePointPair> allPoints = new LinkedList<>();
+    	for (File personFile : gameDir.listFiles())
+    	{
+    		try {
+				BufferedReader fr = new BufferedReader(new FileReader(personFile));
+				String name = fr.readLine();
+				String contents = fr.readLine();
+				fr.close();
+				
+				String[] pointsStr = contents.split(",");
+				int points = 0;
+				for (int i = 0; i<pointsStr.length; i++)
+				{
+					points += Integer.parseInt(pointsStr[i]);
+				}
+				allPoints.add(new NamePointPair(name, points));
+    		} catch (FileNotFoundException e) {
+				System.out.println("File reading went wrong:");
+				e.printStackTrace();
+			} catch (IOException e) {
+				System.out.println("File reading went wrong:");
+				e.printStackTrace();
+			} catch (NumberFormatException e)
+    		{
+				System.out.println("File corrupted:");
+				e.printStackTrace();
+    		}
+    		
+    	}
+    	
+    	GameStats stats = new GameStats(allPoints.toArray(new NamePointPair[0]));
+		return stats;
+	}
+	
+	
+	
+    static class PointHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange t) throws IOException {
         	@SuppressWarnings("unchecked")
 			Map<String, Object> params = (Map<String, Object>)t.getAttribute("parameters");
         	
-        	Element respDiv = new Element("div");
         	if (params.get("points") == null)
         	{
-        		respDiv.text("Points not found.");
+        		System.out.println("Points not found.");
+        		sendFail("points not found", t);
+        	}
+        	else if (params.get("nick") == null)
+        	{
+        		System.out.println("Nick not found.");
+        		sendFail("nick not found", t);
+        	}
+        	else if (params.get("gameId") == null)
+        	{
+        		System.out.println("GameId not found.");
+        		sendFail("gameId not found", t);
         	}
         	else
         	{
-        		respDiv.text(params.get("points").toString());
+        		String[] pointsStr = params.get("points").toString().split(",");
+				int[] points = new int[pointsStr.length];
+				for (int i = 0; i<pointsStr.length; i++)
+				{
+					points[i] = Integer.parseInt(pointsStr[i]);
+				}
+				if(!savePoints(params.get("gameId").toString(), params.get("nick").toString(), points))
+				{
+					sendFail("couldn't save points", t);
+				}
+				else
+				{
+					String response = "Points successfully added.";
+		            t.sendResponseHeaders(200, response.length());
+		            OutputStream os = t.getResponseBody();
+		            os.write(response.getBytes());
+		            os.close();
+		            t.close();
+				}
         	}
+        	
+        	/*
         	Document newDoc = baseDoc.clone();
         	respDiv.appendTo(newDoc.body());
         	String response = newDoc.toString();
+        	*/
         	
+        }
+        
+        static void sendFail(String msg, HttpExchange t) throws IOException
+        {
+        	String response = "Failed adding points: "+msg;
             t.sendResponseHeaders(200, response.length());
             OutputStream os = t.getResponseBody();
             os.write(response.getBytes());
             os.close();
             t.close();
+        }
+        
+        static boolean savePoints(String gameId, String nickname, int[] points)
+        {
+        	File gameDir = new File("./games/"+gameId);
+        	if (!gameDir.isDirectory())
+        	{
+        		System.out.println("Couldn't find game "+gameId);
+        		return false;
+        	}
+        	File personFile = new File("./games/"+gameId+"/"+nickname+".txt");
+        	try {
+				FileWriter fw = new FileWriter(personFile);
+				StringBuilder sb = new StringBuilder();
+				sb.append(nickname+"\n");
+				for (int p : points)
+				{
+					sb.append(p+",");
+				}
+				sb.deleteCharAt(sb.length()-1);
+				fw.write(sb.toString());
+				fw.close();
+			} catch (IOException e) {
+				System.out.println("IO Exception while creating "+"./games/"+gameId+"/"+nickname);
+				return false;
+			}
+        	return true;
         }
     }
     
@@ -101,5 +218,60 @@ public class Server {
             outputStream.close();
         }
     }
-
+    
+    static class GameCreateHandler implements HttpHandler
+    {
+    	
+        @Override
+        public void handle(HttpExchange he) throws IOException {
+        	@SuppressWarnings("unchecked")
+    		Map<String, Object> params = (Map<String, Object>)he.getAttribute("parameters");
+        	
+        	//random String
+        	String s = "";
+        	Random random = new Random();
+        	while (s.equals(""))
+        	{
+        		int leftLimit = 97; // letter 'a'
+        	    int rightLimit = 122; // letter 'z'
+        	    int targetStringLength = 5;
+        	    
+        	    StringBuilder buffer = new StringBuilder(targetStringLength);
+        	    for (int i = 0; i < targetStringLength; i++) {
+        	        int randomLimitedInt = leftLimit + (int) 
+        	          (random.nextFloat() * (rightLimit - leftLimit + 1));
+        	        buffer.append((char) randomLimitedInt);
+        	    }
+        	    s = buffer.toString();
+        	    
+        	    if (new File("./games/"+s).isDirectory())
+        	    	s = "";
+        	}
+        	
+        	createGame(s, he);
+        	
+        	
+        }
+        
+        static void createGame(String id, HttpExchange t) throws IOException
+    	{
+    		File gameDir = new File("./games/"+id);
+    		if (gameDir.isDirectory())
+    		{
+    			System.out.println("Game "+id+" already exists.");
+    			return;
+    		}
+    		if (!gameDir.mkdir())
+    		{
+    			System.out.println("Couldn't create game "+id);
+    			return;
+    		}
+    		String response = "Game created :"+id;
+            t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+            t.close();
+    	}
+    }
 }
