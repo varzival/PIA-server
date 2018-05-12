@@ -15,6 +15,6 @@ public class NamePointPair implements Comparable<NamePointPair>
 
 	@Override
 	public int compareTo(NamePointPair o) {
-		return (int) (this.points - o.points);
+		return (int) (o.points - this.points);
 	}
 }

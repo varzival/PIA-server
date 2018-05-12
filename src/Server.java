@@ -12,6 +12,8 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
 
+import javax.imageio.ImageIO;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -22,17 +24,29 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
+import javafx.application.Application;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.scene.SnapshotParameters;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
+import javafx.scene.image.WritableImage;
+
 public class Server {
 	
 	static Document baseDoc;
-	
+	public static HttpServer server;
+	public static Application javaFxApp;
 	
 	// localhost:8000/sendPoints?points=1,2,3,4&nick=maxmuster&gameId=jlrnv
 	// localhost:8000/createGame
+	// localhost:8000/gameStats?gameId=jlrnv
 	public static void main(String[] args) throws Exception {
 		baseDoc = Jsoup.parse(new File("base.html"),"UTF-8");
+		JavaFXApplication.launch(args);
 		
-        HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
+        server = HttpServer.create(new InetSocketAddress(8000), 0);
         HttpContext context = server.createContext("/sendPoints", new PointHandler());
 
         File imgDir = new File("./images");
@@ -42,11 +56,12 @@ public class Server {
         	if (f.isFile())
         	{
         		System.out.println("Found file: "+filename);
-        		server.createContext("/"+filename, new ImageHandler(filename));
+        		server.createContext("/"+filename, new ImageHandler("./images/"+filename));
         	}
         }
         
         server.createContext("/createGame", new GameCreateHandler());
+        server.createContext("/gameStats", new ResultsHandler());
         
         server.setExecutor(null);
         context.getFilters().add(new ParameterFilter());
@@ -54,50 +69,144 @@ public class Server {
         server.start();
     }
 	
-	static GameStats loadGame(String gameId)
-	{
-		File gameDir = new File("./games/"+gameId);
-    	if (!gameDir.isDirectory())
-    	{
-    		System.out.println("Couldn't find game "+gameId);
-    		return null;
-    	}
+	
+	
+	static class ResultsHandler implements HttpHandler {
+		@Override
+		public void handle(HttpExchange t) throws IOException {
+			Document doc = Jsoup.parse(new File("results_base.html"), "UTF-8");
+			@SuppressWarnings("unchecked")
+			Map<String, Object> params = (Map<String, Object>)t.getAttribute("parameters");
+			//if (!params.containsKey("gameId"))
+			GameStats stats = loadGame("jlrnv");
+			createImages("jlrnv", stats, doc);
+			String response = doc.toString();
+			t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+            t.close();
+			
+			/*
+			if (params.get("gameId") == null)
+        	{
+        		System.out.println("GameId not found.");
+        		sendFail("gameId not found", t);
+        	}
 
-		LinkedList<NamePointPair> allPoints = new LinkedList<>();
-    	for (File personFile : gameDir.listFiles())
-    	{
-    		try {
-				BufferedReader fr = new BufferedReader(new FileReader(personFile));
-				String name = fr.readLine();
-				String contents = fr.readLine();
-				fr.close();
+			else
+			{
+			
+				String gameId = (String)params.get("gameId");
+				GameStats stats = loadGame(gameId);
+				createImages(gameId, stats, doc);
+				String response = doc.toString();
+				t.sendResponseHeaders(200, response.length());
+	            OutputStream os = t.getResponseBody();
+	            os.write(response.getBytes());
+	            os.close();
+	            t.close();
+				System.out.println("Not implemented.");
+        		sendFail("not implemented", t);
+			}
+			*/
+			
+		}
+		
+		static void sendFail(String msg, HttpExchange t) throws IOException
+        {
+        	String response = "Failed requesting game stats: "+msg;
+            t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+            t.close();
+        }
+		
+		static void createImages(String gameId, GameStats stats, Document doc)
+		{
+			CategoryAxis xAxis = new CategoryAxis();
+			NumberAxis yAxis = new NumberAxis();
+			BarChart<String, Number> chart = new BarChart<>(xAxis, yAxis);
+			chart.setTitle("Siegertreppchen");
+			xAxis.setLabel("Nickname");
+			yAxis.setLabel("Punkte");
+			
+			for (int i = 1; i <= 3; i++)
+			{
+				if (i-1 >= stats.namePointPairs.length) break;
+				NamePointPair pair = stats.namePointPairs[i-1];
+				if (pair == null) break;
 				
-				String[] pointsStr = contents.split(",");
-				int points = 0;
-				for (int i = 0; i<pointsStr.length; i++)
-				{
-					points += Integer.parseInt(pointsStr[i]);
-				}
-				allPoints.add(new NamePointPair(name, points));
-    		} catch (FileNotFoundException e) {
-				System.out.println("File reading went wrong:");
-				e.printStackTrace();
+				XYChart.Series<String, Number> place = new XYChart.Series<>();
+				place.setName("Platz "+i);
+				place.getData().add(new XYChart.Data<String, Number>(pair.name, pair.points));
+				chart.getData().add(place);
+			}
+			
+			WritableImage image = chart.snapshot(new SnapshotParameters(), null);
+			File file = new File("./images/"+gameId+"/placement.png");
+			try {
+		        ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
+		        Server.server.createContext("/"+gameId+"/placement.png", new ImageHandler("./images/"+gameId+"/placement.png"));
+		    
+		        Element imageElement = new Element("img");
+		        imageElement.attr("src", "/"+gameId+"/placement.png");
+		        imageElement.attr("alt", "Platzierung");
+		        imageElement.appendTo(doc.body());
+			
 			} catch (IOException e) {
-				System.out.println("File reading went wrong:");
-				e.printStackTrace();
-			} catch (NumberFormatException e)
-    		{
-				System.out.println("File corrupted:");
-				e.printStackTrace();
-    		}
-    		
-    	}
-    	
-    	GameStats stats = new GameStats(allPoints.toArray(new NamePointPair[0]));
-		return stats;
+		    	System.out.println("Couldn't save image.");
+		    	e.printStackTrace();
+		    }
+			
+			doc.title("Spielstatistiken von "+gameId);
+			
+		}
+		
+		static GameStats loadGame(String gameId)
+		{
+			File gameDir = new File("./games/"+gameId);
+	    	if (!gameDir.isDirectory())
+	    	{
+	    		System.out.println("Couldn't find game "+gameId);
+	    		return null;
+	    	}
+
+			LinkedList<NamePointPair> allPoints = new LinkedList<>();
+	    	for (File personFile : gameDir.listFiles())
+	    	{
+	    		try {
+					BufferedReader fr = new BufferedReader(new FileReader(personFile));
+					String name = fr.readLine();
+					String contents = fr.readLine();
+					fr.close();
+					
+					String[] pointsStr = contents.split(",");
+					int points = 0;
+					for (int i = 0; i<pointsStr.length; i++)
+					{
+						points += Integer.parseInt(pointsStr[i]);
+					}
+					allPoints.add(new NamePointPair(name, points));
+	    		} catch (FileNotFoundException e) {
+					System.out.println("File reading went wrong:");
+					e.printStackTrace();
+				} catch (IOException e) {
+					System.out.println("File reading went wrong:");
+					e.printStackTrace();
+				} catch (NumberFormatException e)
+	    		{
+					System.out.println("File corrupted:");
+					e.printStackTrace();
+	    		}
+	    		
+	    	}
+	    	
+	    	GameStats stats = new GameStats(allPoints.toArray(new NamePointPair[0]));
+			return stats;
+		}
 	}
-	
-	
 	
     static class PointHandler implements HttpHandler {
         @Override
@@ -203,7 +312,7 @@ public class Server {
             Headers headers = he.getResponseHeaders();
             headers.add("Content-Type", "image/png");
              
-            File file = new File ("./images/"+filename);
+            File file = new File (filename);
             byte[] bytes  = new byte [(int)file.length()];
             System.out.println(file.getAbsolutePath());
             System.out.println("length:" + file.length());
@@ -266,7 +375,7 @@ public class Server {
     			System.out.println("Couldn't create game "+id);
     			return;
     		}
-    		String response = "Game created :"+id;
+    		String response = "Game created: "+id;
             t.sendResponseHeaders(200, response.length());
             OutputStream os = t.getResponseBody();
             os.write(response.getBytes());
