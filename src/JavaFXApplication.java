@@ -1,36 +1,91 @@
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
-import java.util.LinkedList;
 
 import javax.imageio.ImageIO;
 
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Scene;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.Button;
 import javafx.scene.image.WritableImage;
 import javafx.stage.Stage;
+import javafx.event.EventHandler;
+import javafx.event.EventType;
+import javafx.event.ActionEvent;
+import javafx.event.Event;
 
 public class JavaFXApplication extends Application {
-
+	
+	public static Stage stage;
+	
 	@Override
 	public void start(Stage stage) throws Exception {
+		JavaFXApplication.stage = stage;
 		
-		String gameId = "jlrnv";
-		Document doc = Jsoup.parse("results_base.html", "UTF-8");
-		GameStats stats = loadGame(gameId);
+		Server.run();		
+		
+		//Label label = new Label();
+        Button but = new Button("Press me");
         
-        CategoryAxis xAxis = new CategoryAxis();
+        but.setOnAction((ActionEvent event) -> {
+        	GameStats stats = Server.ResultsHandler.loadGame("jlrnv");
+        	stage.fireEvent(new ImageCreationEvent("jlrnv", stats)
+        		);});
+        
+        stage.addEventHandler(ImageCreationEvent.IMAGE_CREATION, new ImageCreationHandler());
+        
+		//label.setText("Java FX Application");
+        
+		Scene scene = new Scene(but, 200, 200);
+        stage.setTitle("Java FX Application");        
+        stage.setScene(scene);
+        //stage.show();
+	}
+		
+	public static void main(String[] args) throws Exception {
+        launch(args);
+    }
+}
+
+class ServerThread extends Thread
+{
+	@Override
+	public synchronized void start() {
+		try {
+			Server.run();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+}
+
+
+class ImageCreationEvent extends Event
+{
+	private static final long serialVersionUID = 1L;
+	public String gameId;
+	public GameStats stats;
+	
+	public static final EventType<ImageCreationEvent> IMAGE_CREATION = new EventType<ImageCreationEvent>(ANY);
+	
+	public ImageCreationEvent(String gameId, GameStats stats) {
+		super(IMAGE_CREATION);
+		this.gameId = gameId;
+		this.stats = stats;
+	}
+}
+
+class ImageCreationHandler implements EventHandler<ImageCreationEvent>
+{
+
+	public static void createImages(String gameId, GameStats stats)
+	{
+		CategoryAxis xAxis = new CategoryAxis();
 		NumberAxis yAxis = new NumberAxis();
 		BarChart<String, Number> chart = new BarChart<>(xAxis, yAxis);
 		chart.setTitle("Siegertreppchen");
@@ -44,86 +99,47 @@ public class JavaFXApplication extends Application {
 			if (pair == null) break;
 			
 			XYChart.Series<String, Number> place = new XYChart.Series<>();
-			place.setName("Platz "+i);
+			place.setName(pair.name);
 			place.getData().add(new XYChart.Data<String, Number>(pair.name, pair.points));
 			chart.getData().add(place);
 		}
 		
+		WritableImage image = null;
+		try {
 		Scene scene = new Scene(chart, 800, 600);
-        stage.setTitle("Stats View");        
-        stage.setScene(scene);
-		//stage.show();
+		JavaFXApplication.stage.setScene(scene);
+		//JavaFXApplication.stage.show();
 		
-		WritableImage image = scene.snapshot(null);
+		image = scene.snapshot(null);
+		}
+		catch (Exception e)
+		{
+			e.printStackTrace();
+		}
+		
 		File file = new File("./images/"+gameId);
 		if (!file.isDirectory()) file.mkdir();
 		file = new File("./images/"+gameId+"/placement.png");
 		try {
 	        ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
-	        //Server.server.createContext("/"+gameId+"/placement.png", new ImageHandler("./images/"+gameId+"/placement.png"));
-	    
-	        Element imageElement = new Element("img");
-	        imageElement.attr("src", "/"+gameId+"/placement.png");
-	        imageElement.attr("alt", "Platzierung");
-	        imageElement.appendTo(doc.body());
 		
 		} catch (IOException e) {
 	    	System.out.println("Couldn't save image.");
 	    	e.printStackTrace();
 	    }
 		
-		doc.title("Spielstatistiken von "+gameId);
-    }
-	
-	static GameStats loadGame(String gameId)
-	{
-		File gameDir = new File("./games/"+gameId);
-    	if (!gameDir.isDirectory())
-    	{
-    		System.out.println("Couldn't find game "+gameId);
-    		return null;
-    	}
-
-		LinkedList<NamePointPair> allPoints = new LinkedList<>();
-    	for (File personFile : gameDir.listFiles())
-    	{
-    		try {
-				BufferedReader fr = new BufferedReader(new FileReader(personFile));
-				String name = fr.readLine();
-				String contents = fr.readLine();
-				fr.close();
-				
-				String[] pointsStr = contents.split(",");
-				int points = 0;
-				for (int i = 0; i<pointsStr.length; i++)
-				{
-					points += Integer.parseInt(pointsStr[i]);
-				}
-				allPoints.add(new NamePointPair(name, points));
-    		} catch (FileNotFoundException e) {
-				System.out.println("File reading went wrong:");
-				e.printStackTrace();
-			} catch (IOException e) {
-				System.out.println("File reading went wrong:");
-				e.printStackTrace();
-			} catch (NumberFormatException e)
-    		{
-				System.out.println("File corrupted:");
-				e.printStackTrace();
-    		}
-    		
-    	}
-    	
-    	GameStats stats = new GameStats(allPoints.toArray(new NamePointPair[0]));
-		return stats;
-	}
-
-	public void createImages(String gameId, GameStats stats, Document doc)
-	{
 		
+		Server.imageCreationMutex = false;
 	}
 	
-	public static void main(String[] args) {
-        launch(args);
-    }
+	@Override
+	public void handle(ImageCreationEvent ev) {
+		//createImages(ev.gameId, ev.stats);
+		Platform.runLater(new Runnable() {
+            @Override public void run() {
+            	createImages(ev.gameId, ev.stats);
+            }
+		});
+	}
+	
 }

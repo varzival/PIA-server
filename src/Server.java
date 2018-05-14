@@ -39,47 +39,86 @@ public class Server {
 	public static HttpServer server;
 	public static Application javaFxApp;
 	
+	public static boolean imageCreationMutex;
+	
 	// localhost:8000/sendPoints?points=1,2,3,4&nick=maxmuster&gameId=jlrnv
 	// localhost:8000/createGame
 	// localhost:8000/gameStats?gameId=jlrnv
-	public static void main(String[] args) throws Exception {
+	public static void run() throws Exception {
+		//Server.createImages("jlrnv");
 		baseDoc = Jsoup.parse(new File("base.html"),"UTF-8");
-		JavaFXApplication.launch(args);
+		//JavaFXApplication.launch(args);
 		
         server = HttpServer.create(new InetSocketAddress(8000), 0);
-        HttpContext context = server.createContext("/sendPoints", new PointHandler());
-
-        File imgDir = new File("./images");
-        for (String filename : imgDir.list())
-        {
-        	File f = new File("./images/"+filename);
-        	if (f.isFile())
-        	{
-        		System.out.println("Found file: "+filename);
-        		server.createContext("/"+filename, new ImageHandler("./images/"+filename));
-        	}
-        }
-        
-        server.createContext("/createGame", new GameCreateHandler());
-        server.createContext("/gameStats", new ResultsHandler());
+        server.createContext("/sendPoints", new PointHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/images/", new ImageHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/createGame", new GameCreateHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/gameStats", new ResultsHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/test", new TestHandler()).getFilters().add(new ParameterFilter());
         
         server.setExecutor(null);
-        context.getFilters().add(new ParameterFilter());
         System.out.println("Server Running.");
         server.start();
     }
 	
+	static void createImages(String gameId)
+	{
+		GameStats stats = Server.ResultsHandler.loadGame("jlrnv");
+    	JavaFXApplication.stage.fireEvent(new ImageCreationEvent("jlrnv", stats));
+	}
+	
+	static class TestHandler implements HttpHandler {
+		@Override
+		public void handle(HttpExchange t) throws IOException {
+			Document doc = Jsoup.parse(new File("imgtest.html"), "UTF-8");
+			String response = doc.toString();
+			t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+            t.close();
+		}
+	}
 	
 	
-	static class ResultsHandler implements HttpHandler {
+	public static class ResultsHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange t) throws IOException {
 			Document doc = Jsoup.parse(new File("results_base.html"), "UTF-8");
+			
 			@SuppressWarnings("unchecked")
 			Map<String, Object> params = (Map<String, Object>)t.getAttribute("parameters");
-			//if (!params.containsKey("gameId"))
-			GameStats stats = loadGame("jlrnv");
-			createImages("jlrnv", stats, doc);
+			if (!params.containsKey("gameId"))
+			{
+				System.out.println("gameId not found");
+				sendFail("gameId not found", t);
+				return;
+			}
+			String gameId = (String)params.get("gameId");
+			
+			GameStats stats = loadGame(gameId);
+			System.out.println("Stats: "+stats.toString());
+			
+			Server.imageCreationMutex = true;
+	    	JavaFXApplication.stage.fireEvent(new ImageCreationEvent(gameId, stats));
+			
+	    	int maxWaitTime = 2000;
+	    	while (imageCreationMutex)
+	    	{
+	    		try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+	    		maxWaitTime -= 100;
+	    		if (maxWaitTime < 0)
+	    		{
+	    			System.out.println("Image Creation timed out.");
+	    			return;
+	    		}
+	    	}
+	    	
+			addImagesToDoc("jlrnv", doc);
 			String response = doc.toString();
 			t.sendResponseHeaders(200, response.length());
             OutputStream os = t.getResponseBody();
@@ -123,48 +162,17 @@ public class Server {
             t.close();
         }
 		
-		static void createImages(String gameId, GameStats stats, Document doc)
+		
+		static void addImagesToDoc(String gameId, Document doc)
 		{
-			CategoryAxis xAxis = new CategoryAxis();
-			NumberAxis yAxis = new NumberAxis();
-			BarChart<String, Number> chart = new BarChart<>(xAxis, yAxis);
-			chart.setTitle("Siegertreppchen");
-			xAxis.setLabel("Nickname");
-			yAxis.setLabel("Punkte");
-			
-			for (int i = 1; i <= 3; i++)
-			{
-				if (i-1 >= stats.namePointPairs.length) break;
-				NamePointPair pair = stats.namePointPairs[i-1];
-				if (pair == null) break;
-				
-				XYChart.Series<String, Number> place = new XYChart.Series<>();
-				place.setName("Platz "+i);
-				place.getData().add(new XYChart.Data<String, Number>(pair.name, pair.points));
-				chart.getData().add(place);
-			}
-			
-			WritableImage image = chart.snapshot(new SnapshotParameters(), null);
-			File file = new File("./images/"+gameId+"/placement.png");
-			try {
-		        ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
-		        Server.server.createContext("/"+gameId+"/placement.png", new ImageHandler("./images/"+gameId+"/placement.png"));
-		    
-		        Element imageElement = new Element("img");
-		        imageElement.attr("src", "/"+gameId+"/placement.png");
-		        imageElement.attr("alt", "Platzierung");
-		        imageElement.appendTo(doc.body());
-			
-			} catch (IOException e) {
-		    	System.out.println("Couldn't save image.");
-		    	e.printStackTrace();
-		    }
-			
+			Element imageElement = doc.body().getElementById("platzierung");
+	        imageElement.attr("src", "/images/"+gameId+"/placement.png");
+	        imageElement.appendTo(doc.body());
+
 			doc.title("Spielstatistiken von "+gameId);
-			
 		}
 		
-		static GameStats loadGame(String gameId)
+		public static GameStats loadGame(String gameId)
 		{
 			File gameDir = new File("./games/"+gameId);
 	    	if (!gameDir.isDirectory())
@@ -300,22 +308,25 @@ public class Server {
     
     static class ImageHandler implements HttpHandler{
     	
+    	/*
     	String filename;
     	
     	public ImageHandler(String filename) {
     		this.filename = filename;
     	}
+    	*/
     	 
         @Override
         public void handle(HttpExchange he) throws IOException {
         	
             Headers headers = he.getResponseHeaders();
             headers.add("Content-Type", "image/png");
-             
+            
+            String uriPath = he.getRequestURI().getPath();
+            String filename = "."+uriPath;
+            
             File file = new File (filename);
             byte[] bytes  = new byte [(int)file.length()];
-            System.out.println(file.getAbsolutePath());
-            System.out.println("length:" + file.length());
              
             BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file));
             bufferedInputStream.read(bytes, 0, bytes.length);
