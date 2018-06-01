@@ -12,26 +12,16 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
 
-import javax.imageio.ImageIO;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import com.sun.net.httpserver.Headers;
-import com.sun.net.httpserver.HttpContext;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 
 import javafx.application.Application;
-import javafx.embed.swing.SwingFXUtils;
-import javafx.scene.SnapshotParameters;
-import javafx.scene.chart.BarChart;
-import javafx.scene.chart.CategoryAxis;
-import javafx.scene.chart.NumberAxis;
-import javafx.scene.chart.XYChart;
-import javafx.scene.image.WritableImage;
 
 public class Server {
 	
@@ -344,8 +334,8 @@ public class Server {
     	
         @Override
         public void handle(HttpExchange he) throws IOException {
-        	@SuppressWarnings("unchecked")
-    		Map<String, Object> params = (Map<String, Object>)he.getAttribute("parameters");
+        	//@SuppressWarnings("unchecked")
+    		//Map<String, Object> params = (Map<String, Object>)he.getAttribute("parameters");
         	
         	//random String
         	String s = "";
