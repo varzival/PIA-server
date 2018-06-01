@@ -32,7 +32,7 @@
         <executions>
           <execution>
             <goals>
-              <goal>build-info</goal>
+              <goal>repackage</goal>
             </goals>
             <configuration>
 				<mainClass>JavaFXApplication</mainClass>
