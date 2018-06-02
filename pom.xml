@@ -29,6 +29,15 @@
 		<version>2018.5.0</version>
 	</dependency>
 	-->
+	
+	<dependency>
+         <groupId>jfxrt</groupId>
+         <artifactId>jfxrt</artifactId>
+         <scope>system</scope>
+         <version>1.0</version>
+         <systemPath>${basedir}\src\lib\jfxrt.jar</systemPath>
+      </dependency>
+	
    </dependencies>
    
    <build>
@@ -54,6 +63,7 @@
 				</executions>
 			</plugin>
 			
+			<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-resources-plugin</artifactId>
@@ -78,6 +88,7 @@
 				  </execution>
 				</executions>
 			</plugin>
+			-->
 			
 			<!--
 			<plugin>
