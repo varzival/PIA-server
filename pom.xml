@@ -30,15 +30,25 @@
 	</dependency>
 	-->
 	
+	
 	<dependency>
-         <groupId>jfxrt</groupId>
-         <artifactId>jfxrt</artifactId>
-         <scope>system</scope>
+         <groupId>com.sun</groupId>
+         <artifactId>jfx</artifactId>
          <version>1.0</version>
-         <systemPath>${basedir}\src\lib\jfxrt.jar</systemPath>
-      </dependency>
+    </dependency>
+
 	
    </dependencies>
+   
+   <repositories>
+		<repository>
+			<id>project.local</id>
+			<name>project</name>
+			<url>file:${project.basedir}/repo</url>
+		</repository>
+	</repositories>
+
+   
    
    <build>
 		<plugins>
