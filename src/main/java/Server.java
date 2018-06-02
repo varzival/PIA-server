@@ -45,6 +45,7 @@ public class Server {
         server.createContext("/createGame", new GameCreateHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/gameStats", new ResultsHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/test", new TestHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/", new DefaultHandler());
         
         server.setExecutor(null);
         System.out.println("Server Running.");
@@ -55,6 +56,18 @@ public class Server {
 	{
 		GameStats stats = Server.ResultsHandler.loadGame("jlrnv");
     	JavaFXApplication.stage.fireEvent(new ImageCreationEvent("jlrnv", stats));
+	}
+	
+	static class DefaultHandler implements HttpHandler {
+		@Override
+		public void handle(HttpExchange t) throws IOException {
+			String response = "Server running.";
+			t.sendResponseHeaders(200, response.length());
+            OutputStream os = t.getResponseBody();
+            os.write(response.getBytes());
+            os.close();
+            t.close();
+		}
 	}
 	
 	static class TestHandler implements HttpHandler {
