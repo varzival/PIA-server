@@ -1,0 +1,1 @@
+web: java -jar target/pia-server-1.0.jar
