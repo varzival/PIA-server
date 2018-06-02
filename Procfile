@@ -1,1 +1,1 @@
-web: java -jar target/pia-server-1.0.jar
+web: java -cp "target/pia-server-1.0.jar:target/dependency/*" JavaFXApplication
