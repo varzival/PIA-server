@@ -21,6 +21,12 @@
 		<artifactId>jsoup</artifactId>
 		<version>1.11.1</version>
 	</dependency>
+	
+	<dependency>
+		<groupId>org.wildfly.swarm</groupId>
+		<artifactId>javafx</artifactId>
+		<version>2016.10.0</version>
+	</dependency>
    </dependencies>
    
    <build>
