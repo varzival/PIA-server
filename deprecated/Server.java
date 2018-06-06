@@ -37,11 +37,14 @@ public class Server {
 	
 	static Document baseDoc;
 	public static HttpServer server;
+	public static Application javaFxApp;
+	
+	public static boolean imageCreationMutex;
 	
 	// localhost:8000/sendPoints?points=1,2,3,4&nick=maxmuster&gameId=jlrnv
 	// localhost:8000/createGame
 	// localhost:8000/gameStats?gameId=jlrnv
-	public static void main() throws Exception {
+	public static void run() throws Exception {
 		//Server.createImages("jlrnv");
 		baseDoc = Jsoup.parse(new File("base.html"),"UTF-8");
 		//JavaFXApplication.launch(args);
@@ -58,13 +61,11 @@ public class Server {
         server.start();
     }
 	
-	/*
 	static void createImages(String gameId)
 	{
 		GameStats stats = Server.ResultsHandler.loadGame("jlrnv");
     	JavaFXApplication.stage.fireEvent(new ImageCreationEvent("jlrnv", stats));
 	}
-	*/
 	
 	static class TestHandler implements HttpHandler {
 		@Override
@@ -98,13 +99,56 @@ public class Server {
 			GameStats stats = loadGame(gameId);
 			System.out.println("Stats: "+stats.toString());
 			
+			Server.imageCreationMutex = true;
+	    	JavaFXApplication.stage.fireEvent(new ImageCreationEvent(gameId, stats));
 			
+	    	int maxWaitTime = 2000;
+	    	while (imageCreationMutex)
+	    	{
+	    		try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+	    		maxWaitTime -= 100;
+	    		if (maxWaitTime < 0)
+	    		{
+	    			System.out.println("Image Creation timed out.");
+	    			return;
+	    		}
+	    	}
+	    	
+			addImagesToDoc("jlrnv", doc);
 			String response = doc.toString();
 			t.sendResponseHeaders(200, response.length());
             OutputStream os = t.getResponseBody();
             os.write(response.getBytes());
             os.close();
             t.close();
+			
+			/*
+			if (params.get("gameId") == null)
+        	{
+        		System.out.println("GameId not found.");
+        		sendFail("gameId not found", t);
+        	}
+
+			else
+			{
+			
+				String gameId = (String)params.get("gameId");
+				GameStats stats = loadGame(gameId);
+				createImages(gameId, stats, doc);
+				String response = doc.toString();
+				t.sendResponseHeaders(200, response.length());
+	            OutputStream os = t.getResponseBody();
+	            os.write(response.getBytes());
+	            os.close();
+	            t.close();
+				System.out.println("Not implemented.");
+        		sendFail("not implemented", t);
+			}
+			*/
 			
 		}
 		
