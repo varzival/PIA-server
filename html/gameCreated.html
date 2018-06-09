@@ -15,6 +15,12 @@
 <h2>Der Link zum Abfragen des Spielstands:</h2>
 <a id='gameIDLink'></a>
 
+<script>
+var urlOrigin = window.location.origin;
+var gameId = document.getElementById('gameIDText').innerHTML;
+document.getElementById('gameIDLink').innerHTML = urlOrigin + '/gameStats?gameId=' + gameId;
+</script>
+
 </body>
 
 </html>

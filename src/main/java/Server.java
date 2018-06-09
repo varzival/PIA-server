@@ -1,10 +1,6 @@
 import java.io.BufferedInputStream;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -30,13 +26,16 @@ public class Server {
 	
 	public static final int errorCode = 210;
 	
-	// localhost:8000/sendPoints?points=1,2,3,4&nick=maxmuster&gameId=jlrnv
+	// localhost:8000/sendPoints?points=1-2-3-4&nick=maxmuster&gameId=jlrnv
 	// localhost:8000/createGame
 	// localhost:8000/gameStats?gameId=jlrnv
 	public static void main(String[] args) throws Exception {
-		//Server.createImages("jlrnv");
+
+
+		//init database
+		DBManager.init();
 		
-		//JavaFXApplication.launch(args);
+		//init server
 		int port = Integer.parseInt(System.getenv("PORT"));
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/sendPoints", new PointHandler()).getFilters().add(new ParameterFilter());
@@ -81,6 +80,10 @@ public class Server {
 			String gameId = (String)params.get("gameId");
 			
 			GameStats stats = loadGame(gameId);
+			if (stats == null)
+			{
+				sendFail("game "+gameId+" does not exist.", t);
+			}
 			
 			Gson gson = new Gson();
 			
@@ -113,45 +116,11 @@ public class Server {
 
 		public static GameStats loadGame(String gameId)
 		{
-			File gameDir = new File("./games/"+gameId);
-	    	if (!gameDir.isDirectory())
-	    	{
-	    		System.out.println("Couldn't find game "+gameId);
-	    		return null;
-	    	}
-
-			LinkedList<NamePointPair> allPoints = new LinkedList<>();
-	    	for (File personFile : gameDir.listFiles())
-	    	{
-	    		try {
-					BufferedReader fr = new BufferedReader(new FileReader(personFile));
-					String name = fr.readLine();
-					String contents = fr.readLine();
-					fr.close();
-					
-					String[] pointsStr = contents.split(",");
-					int points = 0;
-					for (int i = 0; i<pointsStr.length; i++)
-					{
-						points += Integer.parseInt(pointsStr[i]);
-					}
-					allPoints.add(new NamePointPair(name, points));
-	    		} catch (FileNotFoundException e) {
-					System.out.println("File reading went wrong:");
-					e.printStackTrace();
-				} catch (IOException e) {
-					System.out.println("File reading went wrong:");
-					e.printStackTrace();
-				} catch (NumberFormatException e)
-	    		{
-					System.out.println("File corrupted:");
-					e.printStackTrace();
-	    		}
-	    		
-	    	}
-	    	
-	    	GameStats stats = new GameStats(allPoints.toArray(new NamePointPair[0]));
-			return stats;
+			if (!DBManager.gameExists(gameId))
+			{
+				return null;
+			}
+			return DBManager.getStats(gameId);
 		}
 	}
 	
@@ -171,8 +140,7 @@ public class Server {
 			}
 			String gameId = (String)params.get("gameId");
 			
-			File gameDir = new File("./games/"+gameId);
-        	if (!gameDir.isDirectory())
+        	if (!DBManager.gameExists(gameId))
         	{
         		System.out.println("Couldn't find game "+gameId);
         		sendFail("Couldn't find game "+gameId, t);
@@ -229,7 +197,7 @@ public class Server {
         	}
         	else
         	{
-        		String[] pointsStr = params.get("points").toString().split(",");
+        		String[] pointsStr = params.get("points").toString().split("-");
 				int[] points = new int[pointsStr.length];
 				for (int i = 0; i<pointsStr.length; i++)
 				{
@@ -270,29 +238,7 @@ public class Server {
         
         static boolean savePoints(String gameId, String nickname, int[] points)
         {
-        	File gameDir = new File("./games/"+gameId);
-        	if (!gameDir.isDirectory())
-        	{
-        		System.out.println("Couldn't find game "+gameId);
-        		return false;
-        	}
-        	File personFile = new File("./games/"+gameId+"/"+nickname+".txt");
-        	try {
-				FileWriter fw = new FileWriter(personFile);
-				StringBuilder sb = new StringBuilder();
-				sb.append(nickname+"\n");
-				for (int p : points)
-				{
-					sb.append(p+",");
-				}
-				sb.deleteCharAt(sb.length()-1);
-				fw.write(sb.toString());
-				fw.close();
-			} catch (IOException e) {
-				System.out.println("IO Exception while creating "+"./games/"+gameId+"/"+nickname);
-				return false;
-			}
-        	return true;
+        	return DBManager.writePoints(nickname, gameId, points);
         }
     }
     
@@ -420,21 +366,18 @@ public class Server {
         static void createGame(String id, HttpExchange t) throws IOException
     	{
         	Document doc = Jsoup.parse(new File("html/gameCreated.html"), "UTF-8");
-    		File gameDir = new File("./games/"+id);
-    		if (gameDir.isDirectory())
+    		if (DBManager.gameExists(id))
     		{
     			System.out.println("Game "+id+" already exists.");
     			return;
     		}
-    		if (!gameDir.mkdir())
+    		if (!DBManager.writeGame(id))
     		{
     			System.out.println("Couldn't create game "+id);
     			return;
     		}
     		
     		doc.getElementById("gameIDText").text(id);
-    		String link = server.getAddress().getHostString()+ "/gameStats?gameId=" + id;
-    		doc.getElementById("gameIDLink").text(link);
     		doc.getElementById("gameIDLink").attr("href", "/gameStats?gameId=" + id);
     		
     		String response = doc.toString();
