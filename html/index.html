@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PIA</title>
+</head>
+
+<body>
+
+<h1>Willkommen bei PIA!</h1>
+
+<h2>Neues Spiel erstellen</h2>
+
+<button onclick="createNewGame()">Neues Spiel</button>
+
+<h2>Spielstand abfragen</h2>
+<input type="text" id="inputGameId" placeholder="Spiel-ID">
+<button onclick="requestGameStats()">OK</button>
+
+<p id="errorText"></p>
+
+<script>
+var urlOrigin = window.location.origin;
+
+function createNewGame()
+{
+	window.location = urlOrigin + '/createGame';
+}
+
+function requestGameStats()
+{
+
+	var gameId = document.getElementById('inputGameId').value;
+	var xhr = new XMLHttpRequest();
+	xhr.open('GET', urlOrigin+'/gameStats?gameId='+gameId, true);
+	xhr.send();
+	
+	xhr.onreadystatechange = function() {
+		if (this.readyState == 4 ) {
+			if (this.status == 200)
+			{
+				console.log('succ');
+				/*
+				document.open();
+				document.write(this.responseText);
+				document.close();
+				*/
+				window.location.assign(this.responseURL);
+			}
+			else if (this.status == 210)
+			{
+				console.log('f1');
+				document.getElementById('errorText').innerHTML = 'Spiel mit angegebener ID nicht gefunden.';
+				setTimeout(fade_out, 5000);
+			}
+			else
+			{
+				console.log('f2');
+				document.getElementById('errorText').innerHTML = 'Fehler aufgetreten.';
+				setTimeout(fade_out, 5000);
+			}
+		}
+	};
+}
+
+function fade_out() {
+  document.getElementById('errorText').innerHTML = '';
+}
+
+</script>
+
+</body>
+
+</html>
