@@ -1,0 +1,1 @@
+java -jar pia-server-1.0-shaded.jar
