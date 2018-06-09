@@ -22,74 +22,15 @@
 		<version>1.11.1</version>
 	</dependency>
 	
-	<!--
 	<dependency>
-		<groupId>org.wildfly.swarm</groupId>
-		<artifactId>javafx</artifactId>
-		<version>2018.5.0</version>
+		<groupId>com.google.code.gson</groupId>
+		<artifactId>gson</artifactId>
+		<version>2.6.2</version>
 	</dependency>
-	-->
-	
-	
-	<dependency>
-         <groupId>com.sun</groupId>
-         <artifactId>jfx</artifactId>
-         <version>1.0</version>
-    </dependency>
-
-	
    </dependencies>
-   
-   <repositories>
-		<repository>
-			<id>project.local</id>
-			<name>project</name>
-			<url>file:${project.basedir}/repo</url>
-		</repository>
-	</repositories>
-
-   
    
    <build>
 		<plugins>
-		
-		<plugin>
-			<groupId>org.apache.maven.plugins</groupId>
-			<artifactId>maven-dependency-plugin</artifactId>
-			<version>2.1</version>
-			<executions>
-			 <execution>
-			  <id>copy-dependencies</id>
-			  <phase>package</phase>
-			  <goals>
-			   <goal>copy-dependencies</goal>
-			  </goals>
-			  <configuration>
-			   <outputdirectory>${project.build.directory}/lib</outputdirectory>
-			   <overwritereleases>false</overwritereleases>
-			   <overwritesnapshots>false</overwritesnapshots>
-			   <overwriteifnewer>true</overwriteifnewer>
-			  </configuration>
-			 </execution>
-			</executions>
-		 </plugin>
-		
-		  <plugin>
-			<groupId>org.apache.maven.plugins</groupId>
-			<artifactId>maven-jar-plugin</artifactId>
-			<version>2.4</version>
-			<configuration>
-			  <archive>
-				<manifest>
-					<mainClass>JavaFXApplication</mainClass>
-					<addClasspath>true</addClasspath>
-					<classpathPrefix>lib/</classpathPrefix>
-				</manifest>
-			  </archive>
-			</configuration>
-		  </plugin>
-		  
-		<!--
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-shade-plugin</artifactId>
@@ -103,14 +44,14 @@
 					<configuration>
 					  <transformers>
 						<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-						  <mainClass>JavaFXApplication</mainClass>
+						  <mainClass>Server</mainClass>
 						</transformer>
 					  </transformers>
+					  <outputDirectory>${basedir}</outputDirectory>
 					</configuration>
 				  </execution>
 				</executions>
 			</plugin>
-		-->
 			
 			<!--
 			<plugin>
@@ -158,6 +99,5 @@
 			
 		</plugins>
 	</build>
-	
    
 </project>

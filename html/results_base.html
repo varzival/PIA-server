@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Results</title>
+</head>
+
+<body>
+
+<script src="/scripts/Chart.min.js"></script>
+<script src="/scripts/jquery-3.3.1.min.js"></script>
+
+<canvas id="myChart" width="740" height="200"></canvas>
+
+<script>
+var urlParams = new URLSearchParams(window.location.search);
+var urlOrigin = window.location.origin;
+var gameId = urlParams.get('gameId');
+
+
+var ctx = document.getElementById("myChart").getContext("2d");
+var jsonData;
+var jsonResponse = $.ajax({
+    url: urlOrigin + '/gameInfo?gameId=' + gameId,
+    dataType: 'json',
+  }).done(function(results) {
+  
+    window.myBar = new Chart(ctx, {
+				type: 'bar',
+				data: results,
+				options: {
+					responsive: true,
+					legend: {
+						display: false,
+						position: 'top',
+					},
+					title: {
+						display: true,
+						text: 'Rangliste'
+					}
+				}
+			});
+
+
+})
+
+
+</script>
+</body>
+
+</html>
