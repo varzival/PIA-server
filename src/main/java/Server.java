@@ -37,8 +37,8 @@ public class Server {
 		//Server.createImages("jlrnv");
 		
 		//JavaFXApplication.launch(args);
-		
-        server = HttpServer.create(new InetSocketAddress(8000), 0);
+		int port = Integer.parseInt(System.getenv("PORT"));
+        server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/sendPoints", new PointHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/gameInfo", new GameInfoHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/images/", new ImageHandler());
