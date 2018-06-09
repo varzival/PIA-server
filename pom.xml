@@ -48,6 +48,7 @@
 						</transformer>
 					  </transformers>
 					  <outputDirectory>${project.basedir}</outputDirectory>
+					  <finalName>${project.artifactId}</finalName>
 					</configuration>
 				  </execution>
 				</executions>
