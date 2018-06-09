@@ -47,7 +47,7 @@
 						  <mainClass>Server</mainClass>
 						</transformer>
 					  </transformers>
-					  <outputDirectory>${basedir}</outputDirectory>
+					  <outputDirectory>${project.basedir}</outputDirectory>
 					</configuration>
 				  </execution>
 				</executions>
