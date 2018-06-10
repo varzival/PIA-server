@@ -10,6 +10,7 @@ import java.util.Random;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -379,6 +380,10 @@ public class Server {
     		
     		doc.getElementById("gameIDText").text(id);
     		doc.getElementById("gameIDLink").attr("href", "/gameStats?gameId=" + id);
+    		
+    		Element scr = doc.getElementsByTag("script").first();
+    		String oldText = scr.html();
+    		scr.text("var gameId = '"+id+"'; \n"+oldText);
     		
     		String response = doc.toString();
     		
