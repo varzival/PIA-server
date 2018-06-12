@@ -9,46 +9,83 @@
 <script src="/scripts/Chart.min.js"></script>
 <script src="/scripts/jquery-3.3.1.min.js"></script>
 
-<canvas id="myChart" width="740" height="200"></canvas>
+<canvas id="points" name="Rangliste" width="740" height="200"></canvas>
+<canvas id="opinions0" name="Findet Ihr, dass Bayern vermehrt in den Ausbau von Ganztagsschulen investieren sollte?" width="740" height="200"></canvas>
+<canvas id="opinions1" name="Findet Ihr, dass beeinträchtigte Schüler, anstatt in speziell ausgelegten Förderschulen, besser in herkömmlichen Schulen unterrichtet werden sollen?" width="740" height="200"></canvas>
+<canvas id="opinions2" name="Haltet Ihr Zuwandererklassen für die bessere Unterrichtsform von ausländischen Schülern als Integrationsklassen?" width="740" height="200"></canvas>
+<canvas id="opinions3" name="Findet Ihr, dass in bayrischen Klassenzimmern ein Kreuz hängen sollte?" width="740" height="200"></canvas>
+<canvas id="opinions4" name="Findet Ihr, es sollte eine Vorschrift geben, die den Schülern vorschreibt, was sie essen sollen, anstatt jeden Schüler für sich selbst entscheiden zu lassen?" width="740" height="200"></canvas>
 
 <script>
 var urlParams = new URLSearchParams(window.location.search);
 var urlOrigin = window.location.origin;
 var gameId = urlParams.get('gameId');
 
+fillChart("points", "bar");
+for (var i = 0; i<5; i++)
+{
+	fillChart("opinions"+i, "pie");
+}
 
-var ctx = document.getElementById("myChart").getContext("2d");
-var jsonData;
-var jsonResponse = $.ajax({
-    url: urlOrigin + '/gameInfo?gameId=' + gameId + '&chart=points',
+function fillChart(chartId, type)
+{
+	var ctx = document.getElementById(chartId).getContext("2d");
+	var chartName = document.getElementById(chartId).getAttribute("name");
+	
+	$.ajax({
+    url: urlOrigin + '/gameInfo?gameId=' + gameId + '&chart=' + chartId,
     dataType: 'json',
-  }).done(function(results) {
-  
-    window.myBar = new Chart(ctx, {
-				type: 'bar',
-				data: results,
-				options: {
-					responsive: true,
-					legend: {
-						display: false,
-						position: 'top',
-					},
-					title: {
-						display: true,
-						text: 'Rangliste'
-					},
-					scales: {
-                        yAxes: [{
-                            ticks: {
-                                beginAtZero: true
-                                }
-                        }]
+	}).done(function(results) {
+	
+	if (type == "pie")
+	{
+		new Chart(ctx, {
+					type: type,
+					data: results,
+					options: {
+						responsive: true,
+						legend: {
+							display: false,
+							position: 'top',
+						},
+						title: {
+							display: true,
+							text: chartName
+						},
 					}
-				}
-			});
+				});
+	}
+	
+	else if (type == "bar")
+	{
+		new Chart(ctx, {
+					type: type,
+					data: results,
+					options: {
+						responsive: true,
+						legend: {
+							display: false,
+							position: 'top',
+						},
+						title: {
+							display: true,
+							text: chartName
+						},
+						scales: {
+							yAxes: [{
+								ticks: {
+									beginAtZero: true
+									}
+							}]
+						}
+					}
+				});
+	}
+	
 			
-});
-
+				
+	});
+}
 </script>
 </body>
 
