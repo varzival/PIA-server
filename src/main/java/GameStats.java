@@ -3,11 +3,14 @@ import java.util.Arrays;
 public class GameStats {
 	
 	public NamePointPair[] namePointPairs;
+	public OpinionStats[] opinionStats;
 	
-	public GameStats(NamePointPair[] namePointPairs)
+	
+	public GameStats(NamePointPair[] namePointPairs, OpinionStats[] opinionStats)
 	{
 		this.namePointPairs = namePointPairs;
 		Arrays.sort(this.namePointPairs);
+		this.opinionStats = opinionStats;
 	}
 	
 	@Override

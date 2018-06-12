@@ -15,9 +15,6 @@ public class DBManager {
 		try {
 			dbConnection = DriverManager.getConnection(dbUrl);
 			
-			createTables();
-
-			
 		} catch (SQLException e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -38,6 +35,7 @@ public class DBManager {
 					+ "nickname varchar(40) NOT NULL,"
 					+ "gameid char(5) NOT NULL REFERENCES games,"
 					+ "pointstring varchar(20) NOT NULL,"
+					+ "opinionstring varchar(20) NOT NULL,"
 					+ "PRIMARY KEY(nickname, gameid)"
 					+ ")");
 		} catch (SQLException e) {
@@ -49,11 +47,15 @@ public class DBManager {
 		int[] points2 = {5, 6, 7, 8, 9};
 		int[] points3 = {10, 11, 12, 13, 14};
 		
+		char[] ops = {'p', 'n', 'n', 'n', 'n'};
+		char[] ops2 = {'p', 'c', 'p', 'c', 'p'};
+		char[] ops3 = {'p', 'p', 'p', 'p', 'p'};
+		
 		writeGame("test");
 		
-		writePoints("A", "test", points);
-		writePoints("B", "test", points2);
-		writePoints("C", "test", points3);
+		writePoints("A", "test", points, ops);
+		writePoints("B", "test", points2, ops2);
+		writePoints("C", "test", points3, ops3);
 		
 		return true;
 	}
@@ -117,7 +119,7 @@ public class DBManager {
 		
 	}
 	
-	public static boolean writePoints(String nick, String gameId, int[] points)
+	public static boolean writePoints(String nick, String gameId, int[] points, char[] opinions)
 	{
 		boolean entryExists;
 		int[] pointsRead = getPoints(nick, gameId);
@@ -131,6 +133,12 @@ public class DBManager {
 		}
 		pointsb.deleteCharAt(pointsb.length()-1);
 		
+		StringBuilder opsb = new StringBuilder();
+		for (int i = 0; i<opinions.length; i++)
+		{
+			opsb.append(opinions[i]+"-");
+		}
+		opsb.deleteCharAt(opsb.length()-1);
 		
 		
 		try
@@ -143,7 +151,8 @@ public class DBManager {
 				rowsb.append("(");
 				rowsb.append("'"+nick+"', ");
 				rowsb.append("'"+gameId+"', ");
-				rowsb.append("'"+pointsb.toString()+"'");
+				rowsb.append("'"+pointsb.toString()+"', ");
+				rowsb.append("'"+opsb.toString()+"'");
 				rowsb.append(")");
 				
 				update = "INSERT INTO player_points VALUES "
@@ -152,7 +161,8 @@ public class DBManager {
 			else
 			{
 				update = "UPDATE player_points "
-						+ "SET pointstring='"+pointsb.toString()+"' "
+						+ "SET pointstring='"+pointsb.toString()+"', "
+						+ "opinionstring='"+opsb.toString()+"' "
 						+ "WHERE nickname='"+nick+"'"
 						+ " AND gameid='"+gameId+"'";
 			}
@@ -169,7 +179,7 @@ public class DBManager {
 	{
 		try {
 			Statement smt = dbConnection.createStatement();
-			String query = "SELECT t.pointstring "
+			String query = "SELECT t.pointstring, t.opinionstring "
 					+ "FROM player_points t "
 					+ "WHERE t.nickname='"+nick+"'"
 					+ " AND t.gameid='"+gameId+"'";
@@ -199,16 +209,19 @@ public class DBManager {
 	{
 		try {
 			Statement smt = dbConnection.createStatement();
-			String query = "SELECT t.nickname, t.pointstring "
+			String query = "SELECT t.nickname, t.pointstring, t.opinionstring "
 					+ "FROM player_points t "
 					+ "WHERE t.gameid='"+gameId+"'";
 			ResultSet rs = smt.executeQuery(query);
 			
 			LinkedList<NamePointPair> npp = new LinkedList<NamePointPair>();
+			LinkedList<OpinionStats> opstats = new LinkedList<>();
 			while (rs.next())
 			{
 				String name = rs.getString(1);
 				String p = rs.getString(2);
+				String op = rs.getString(3);
+				
 				String[] pointstrings = p.split("-");
 				int pointSum = 0;
 				for (int i = 0; i<pointstrings.length; i++)
@@ -216,9 +229,34 @@ public class DBManager {
 					pointSum += Integer.parseInt(pointstrings[i]);
 				}
 				npp.add(new NamePointPair(name, pointSum));
+				
+				String[] opstrings = op.split("-");
+				for (int i = opstats.size(); i<opstrings.length; i++)
+				{
+					opstats.add(new OpinionStats(0, 0, 0));
+				}
+				for (int i = 0; i<opstats.size(); i++)
+				{
+					switch(opstrings[i])
+					{
+					case "p":
+						opstats.get(i).pro ++;
+						break;
+					case "c":
+						opstats.get(i).contra ++;
+						break;
+					case "n":
+						opstats.get(i).none ++;
+						break;
+					default:
+						System.out.println("wrong data in db: "+opstrings[i]);
+						return null;
+					}
+				}
+				
 			}
 
-			return new GameStats(npp.toArray(new NamePointPair[0]));
+			return new GameStats(npp.toArray(new NamePointPair[0]), opstats.toArray(new OpinionStats[0]));
 		} catch (SQLException e) {
 			e.printStackTrace();
 			return null;
