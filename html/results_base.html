@@ -20,7 +20,7 @@ var gameId = urlParams.get('gameId');
 var ctx = document.getElementById("myChart").getContext("2d");
 var jsonData;
 var jsonResponse = $.ajax({
-    url: urlOrigin + '/gameInfo?gameId=' + gameId,
+    url: urlOrigin + '/gameInfo?gameId=' + gameId + '&chart=points',
     dataType: 'json',
   }).done(function(results) {
   

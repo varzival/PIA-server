@@ -8,6 +8,7 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
 
+import org.apache.commons.codec.digest.DigestUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -27,6 +28,8 @@ public class Server {
 	
 	public static final int errorCode = 210;
 	
+	public static final int stations = 5;
+	
 	// localhost:8000/sendPoints?points=1-2-3-4&nick=maxmuster&gameId=jlrnv
 	// localhost:8000/createGame
 	// localhost:8000/gameStats?gameId=jlrnv
@@ -40,6 +43,7 @@ public class Server {
 		int port = Integer.parseInt(System.getenv("PORT"));
         server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/sendPoints", new PointHandler()).getFilters().add(new ParameterFilter());
+        server.createContext("/signUp", new SignUpHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/gameInfo", new GameInfoHandler()).getFilters().add(new ParameterFilter());
         server.createContext("/images/", new ImageHandler());
         server.createContext("/createGame", new GameCreateHandler()).getFilters().add(new ParameterFilter());
@@ -53,16 +57,47 @@ public class Server {
         server.start();
     }
 	
+	protected static void sendResponse(int code, String response, HttpExchange t) throws IOException
+	{
+		t.sendResponseHeaders(code, response.length());
+        OutputStream os = t.getResponseBody();
+        os.write(response.getBytes());
+        os.close();
+        t.close();
+	}
+	
+	protected static void sendFile(String contentType, HttpExchange he) throws IOException
+	{
+		Headers headers = he.getResponseHeaders();
+        headers.add("Content-Type", contentType);
+        
+        String uriPath = he.getRequestURI().getPath();
+        String filename = "."+uriPath;
+        
+        File file = new File (filename);
+        byte[] bytes  = new byte [(int)file.length()];
+         
+        BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file));
+        bufferedInputStream.read(bytes, 0, bytes.length);
+        bufferedInputStream.close();
+
+        he.sendResponseHeaders(200, file.length());
+        OutputStream outputStream = he.getResponseBody();
+        outputStream.write(bytes, 0, bytes.length);
+        outputStream.close();
+	}
+	
+	protected static String generateHash(String data)
+	{
+		return DigestUtils.sha1Hex(data);
+	}
+	
 	static class IndexHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange t) throws IOException {
 			Document doc = Jsoup.parse(new File("html/index.html"), "UTF-8");
 			String response = doc.toString();
-			t.sendResponseHeaders(200, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+			Server.sendResponse(200, response, t);
 		}
 	}
 	
@@ -79,40 +114,84 @@ public class Server {
 				return;
 			}
 			String gameId = (String)params.get("gameId");
+			if (!params.containsKey("chart"))
+			{
+				System.out.println("chart not found");
+				sendFail("chart not found", t);
+				return;
+			}
+			String chartStr = (String)params.get("chart");
 			
 			GameStats stats = loadGame(gameId);
 			if (stats == null)
 			{
 				sendFail("game "+gameId+" does not exist.", t);
+				return;
 			}
+			int stations = stats.opinionStats.length;
 			
 			Gson gson = new Gson();
 			
 			LinkedList<String> labels = new LinkedList<>();
 			LinkedList<Integer> data = new LinkedList<>();
-			for (int i = 0; i < stats.namePointPairs.length; i++)
-			{
-				labels.add(stats.namePointPairs[i].name);
-				data.add(stats.namePointPairs[i].points);
-			}
-			ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Punkte", Server.pia_orange, Server.pia_orange);
 			
-			String response = gson.toJson(cd);
-			t.sendResponseHeaders(200, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+			
+			if (chartStr.equals("points"))
+			{
+				for (int i = 0; i < stats.namePointPairs.length; i++)
+				{
+					labels.add(stats.namePointPairs[i].name);
+					data.add(stats.namePointPairs[i].points);
+				}
+				ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Punkte", Server.pia_orange, Server.pia_orange);
+				String response = gson.toJson(cd);
+				Server.sendResponse(200, response, t);
+	            return;
+			}
+			
+			if (chartStr.startsWith("opinions"))
+			{
+				try
+				{
+					int num = Integer.parseInt(chartStr.charAt(chartStr.length()-1)+"");
+					if (num < 0 || num > stations - 1)
+					{
+						sendFail("unknown chart number: "+num, t);
+						return;
+					}
+					OpinionStats opst = stats.opinionStats[num];
+					
+					labels.add("pro");
+					labels.add("contra");
+					labels.add("keine Meinung");
+					
+					data.add(opst.pro);
+					data.add(opst.contra);
+					data.add(opst.none);
+					
+					String colors = "[window.chartColors.green, window.chartColors.green, window.chartColors.grey]";
+					ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Meinungen", colors, colors);
+					String response = gson.toJson(cd);
+					Server.sendResponse(200, response, t);
+		            return;
+
+					
+				}
+				catch (NumberFormatException e)
+				{
+					sendFail("unknown chart number", t);
+					return;
+				}
+				
+			}
+			
+			sendFail("unknown chart", t);
 		}
 		
 		static void sendFail(String msg, HttpExchange t) throws IOException
         {
         	String response = "Failed requesting game stats: "+msg;
-            t.sendResponseHeaders(errorCode, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+        	Server.sendResponse(Server.errorCode, response, t);
         }
 
 		public static GameStats loadGame(String gameId)
@@ -150,11 +229,7 @@ public class Server {
         	else
         	{
         		String response = doc.toString();
-    			t.sendResponseHeaders(200, response.length());
-                OutputStream os = t.getResponseBody();
-                os.write(response.getBytes());
-                os.close();
-                t.close();
+        		Server.sendResponse(200, response, t);
         	}
 
 		}
@@ -164,14 +239,84 @@ public class Server {
 		static void sendFail(String msg, HttpExchange t) throws IOException
         {
         	String response = "Failed requesting game stats: "+msg;
-            t.sendResponseHeaders(errorCode, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+        	Server.sendResponse(Server.errorCode, response, t);
         }
 		
 		
+		
+	}
+	
+	static class SignUpHandler implements HttpHandler {
+		
+	        @Override
+	        public void handle(HttpExchange t) throws IOException {
+	        	
+	        	@SuppressWarnings("unchecked")
+				Map<String, Object> params = (Map<String, Object>)t.getAttribute("parameters");
+	        	
+	        	if (params.get("nick") == null)
+	        	{
+	        		System.out.println("Nick not found.");
+	        		sendFail("nick not found", t);
+	        	}
+	        	else if (params.get("gameId") == null)
+	        	{
+	        		System.out.println("GameId not found.");
+	        		sendFail("gameId not found", t);
+	        	}
+	        	else if (params.get("hash") == null)
+	        	{
+	        		System.out.println("GameId not found.");
+	        		sendFail("hash not found", t);
+	        	}
+	        	else
+	        	{
+	        		String h = params.get("hash").toString();
+	        		String gameId = params.get("gameId").toString();
+	        		String nick = params.get("nick").toString();
+	        		String full = nick + gameId + "super secret code";
+	        		String hashGenerated = Server.generateHash(full);
+	        		
+	        		if (!h.equals(hashGenerated))
+	        		{
+	        			System.out.println("Hash read: "+h +"; Hash generated: "+hashGenerated);
+	        			sendFail("wrong hash", t);
+	        			return;
+	        		}
+	        		
+	        		if (!DBManager.gameExists(gameId))
+	        		{
+	        			sendFail("game "+gameId+" does not exist", t);
+	        			return;
+	        		}
+	        		
+	        		int[] points = new int[Server.stations];
+	        		char[] ops = new char[Server.stations];
+	        		for (int i = 0; i<ops.length; i++)
+	        		{
+	        			ops[i] = 'n';
+	        		}
+	        		
+	        		if (DBManager.writePoints(nick, gameId, points, ops))
+	        		{
+	        			String response = "Sucessfully signed up.";
+	        			Server.sendResponse(200, response, t);
+	        		}
+	        		else
+	        		{
+	        			sendFail("DB error", t);
+	        		}
+	        		
+	        	}
+	        	
+	        	
+	        }
+	        
+	        static void sendFail(String msg, HttpExchange t) throws IOException
+	        {
+	        	String response = "Failed signing up: "+msg;
+	        	Server.sendResponse(Server.errorCode, response, t);
+	        }
 		
 	}
 	
@@ -196,83 +341,85 @@ public class Server {
         		System.out.println("GameId not found.");
         		sendFail("gameId not found", t);
         	}
+        	else if (params.get("opinions") == null)
+        	{
+        		System.out.println("GameId not found.");
+        		sendFail("opinions not found", t);
+        	}
+        	else if (params.get("hash") == null)
+        	{
+        		System.out.println("GameId not found.");
+        		sendFail("hash not found", t);
+        	}
         	else
         	{
-        		String[] pointsStr = params.get("points").toString().split("-");
+        		String h = params.get("hash").toString();
+        		String ops = params.get("opinions").toString();
+        		String pts = params.get("points").toString();
+        		String gameId = params.get("gameId").toString();
+        		String nick = params.get("nick").toString();
+        		String full = nick + gameId + pts + ops + "super secret code";
+        		String hashGenerated = Server.generateHash(full);
+        		
+        		if (!h.equals(hashGenerated))
+        		{
+        			System.out.println("Hash read: "+h +"; Hash generated: "+hashGenerated);
+        			sendFail("wrong hash", t);
+        			return;
+        		}
+        		
+        		String[] pointsStr = pts.split("-");
+        		String[] opinionsStr = ops.split("-");
 				int[] points = new int[pointsStr.length];
 				for (int i = 0; i<pointsStr.length; i++)
 				{
 					points[i] = Integer.parseInt(pointsStr[i]);
 				}
-				if(!savePoints(params.get("gameId").toString(), params.get("nick").toString(), points))
+				
+				char[] opinions = new char[opinionsStr.length];
+				for (int i = 0; i<opinionsStr.length; i++)
+				{
+					if (! (opinionsStr[i].equals("n") || opinionsStr[i].equals("p") || opinionsStr[i].equals("c")))
+					{
+						sendFail("couldn't save points: opinions not in right format", t);
+						return;
+					}
+					opinions[i] = opinionsStr[i].charAt(0);
+				}
+				
+			
+				if(!savePoints(gameId, nick, points, opinions))
 				{
 					sendFail("couldn't save points", t);
 				}
 				else
 				{
 					String response = "Points successfully added.";
-		            t.sendResponseHeaders(200, response.length());
-		            OutputStream os = t.getResponseBody();
-		            os.write(response.getBytes());
-		            os.close();
-		            t.close();
+					Server.sendResponse(200, response, t);
 				}
         	}
-        	
-        	/*
-        	Document newDoc = baseDoc.clone();
-        	respDiv.appendTo(newDoc.body());
-        	String response = newDoc.toString();
-        	*/
         	
         }
         
         static void sendFail(String msg, HttpExchange t) throws IOException
         {
         	String response = "Failed adding points: "+msg;
-            t.sendResponseHeaders(errorCode, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+        	Server.sendResponse(Server.errorCode, response, t);
         }
         
-        static boolean savePoints(String gameId, String nickname, int[] points)
+        static boolean savePoints(String gameId, String nickname, int[] points, char[] opinions)
         {
-        	return DBManager.writePoints(nickname, gameId, points);
+        	return DBManager.writePoints(nickname, gameId, points, opinions);
         }
     }
     
     static class ImageHandler implements HttpHandler{
     	
-    	/*
-    	String filename;
-    	
-    	public ImageHandler(String filename) {
-    		this.filename = filename;
-    	}
-    	*/
     	 
         @Override
         public void handle(HttpExchange he) throws IOException {
         	
-            Headers headers = he.getResponseHeaders();
-            headers.add("Content-Type", "image/png");
-            
-            String uriPath = he.getRequestURI().getPath();
-            String filename = "."+uriPath;
-            
-            File file = new File (filename);
-            byte[] bytes  = new byte [(int)file.length()];
-             
-            BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file));
-            bufferedInputStream.read(bytes, 0, bytes.length);
-            bufferedInputStream.close();
- 
-            he.sendResponseHeaders(200, file.length());
-            OutputStream outputStream = he.getResponseBody();
-            outputStream.write(bytes, 0, bytes.length);
-            outputStream.close();
+            Server.sendFile("image/png", he);
         }
     }
     
@@ -281,23 +428,7 @@ public class Server {
     	@Override
         public void handle(HttpExchange he) throws IOException {
         	
-            Headers headers = he.getResponseHeaders();
-            headers.add("Content-Type", "text/javascript");
-            
-            String uriPath = he.getRequestURI().getPath();
-            String filename = "."+uriPath;
-            
-            File file = new File (filename);
-            byte[] bytes  = new byte [(int)file.length()];
-             
-            BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file));
-            bufferedInputStream.read(bytes, 0, bytes.length);
-            bufferedInputStream.close();
- 
-            he.sendResponseHeaders(200, file.length());
-            OutputStream outputStream = he.getResponseBody();
-            outputStream.write(bytes, 0, bytes.length);
-            outputStream.close();
+            Server.sendFile("text/javascript", he);
         }
     	
     	
@@ -307,24 +438,7 @@ public class Server {
     	
     	@Override
         public void handle(HttpExchange he) throws IOException {
-        	
-            Headers headers = he.getResponseHeaders();
-            headers.add("Content-Type", "text/css");
-            
-            String uriPath = he.getRequestURI().getPath();
-            String filename = "."+uriPath;
-            
-            File file = new File (filename);
-            byte[] bytes  = new byte [(int)file.length()];
-             
-            BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(file));
-            bufferedInputStream.read(bytes, 0, bytes.length);
-            bufferedInputStream.close();
- 
-            he.sendResponseHeaders(200, file.length());
-            OutputStream outputStream = he.getResponseBody();
-            outputStream.write(bytes, 0, bytes.length);
-            outputStream.close();
+        	Server.sendFile("text/css", he);
         }
     	
     	
@@ -387,11 +501,7 @@ public class Server {
     		
     		String response = doc.toString();
     		
-            t.sendResponseHeaders(200, response.length());
-            OutputStream os = t.getResponseBody();
-            os.write(response.getBytes());
-            os.close();
-            t.close();
+            Server.sendResponse(200, response, t);
     	}
     }
 }
