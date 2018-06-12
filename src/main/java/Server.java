@@ -25,6 +25,9 @@ public class Server {
 	public static HttpServer server;
 	
 	public static final String pia_orange = "rgb(242, 132, 55)";
+	public static final String grey = "rgb(169,169,169)";
+	public static final String red = "rgb(255, 0, 0)";
+	public static final String green = "rgb(0, 255, 0)";
 	
 	public static final int errorCode = 210;
 	
@@ -143,7 +146,9 @@ public class Server {
 					labels.add(stats.namePointPairs[i].name);
 					data.add(stats.namePointPairs[i].points);
 				}
-				ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Punkte", Server.pia_orange, Server.pia_orange);
+				String[] colors = new String[stats.namePointPairs.length];
+				for (int i=0; i<colors.length; i++) colors[i] = Server.pia_orange;
+				ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Punkte", colors);
 				String response = gson.toJson(cd);
 				Server.sendResponse(200, response, t);
 	            return;
@@ -169,8 +174,8 @@ public class Server {
 					data.add(opst.contra);
 					data.add(opst.none);
 					
-					String colors = "[window.chartColors.green, window.chartColors.green, window.chartColors.grey]";
-					ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Meinungen", colors, colors);
+					String[] colors = { Server.green, Server.red, Server.grey };
+					ChartsDataset cd = new ChartsDataset(labels.toArray(new String[0]), data.toArray(new Integer[0]), "Meinungen", colors);
 					String response = gson.toJson(cd);
 					Server.sendResponse(200, response, t);
 		            return;
