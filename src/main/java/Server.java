@@ -4,6 +4,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Random;
@@ -213,7 +215,7 @@ public class Server {
 	public static class ResultsHandler implements HttpHandler {
 		@Override
 		public void handle(HttpExchange t) throws IOException {
-			Document doc = Jsoup.parse(new File("html/results_base.html"), "UTF-8");
+			//Document doc = Jsoup.parse(new File("html/results_base.html"), "UTF-8");
 			
 			@SuppressWarnings("unchecked")
 			Map<String, Object> params = (Map<String, Object>)t.getAttribute("parameters");
@@ -233,7 +235,9 @@ public class Server {
 			
         	else
         	{
-        		String response = doc.toString();
+        		byte[] htmlFile = Files.readAllBytes(Paths.get("html/results_base.html"));
+        		String response = new String (htmlFile, "UTF-8");
+        		System.out.println("Sending results file.");
         		Server.sendResponse(200, response, t);
         	}
 
