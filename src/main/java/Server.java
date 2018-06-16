@@ -35,9 +35,8 @@ public class Server {
 	
 	public static final int stations = 5;
 	
-	// localhost:8000/sendPoints?points=1-2-3-4&nick=maxmuster&gameId=jlrnv
-	// localhost:8000/createGame
-	// localhost:8000/gameStats?gameId=jlrnv
+	// http://localhost:8000/sendPoints?points=1-2-3-4-5&nick=maxmuster&gameId=hnwyu&opinions=p-p-p-p-p&hash=e6033ca937a3ac41a2a716c69ccda81e727b4aec
+	// maxmusterhnwyu1-2-3-4-5p-p-p-p-psuper secret code
 	public static void main(String[] args) throws Exception {
 
 
@@ -275,7 +274,7 @@ public class Server {
 	        	}
 	        	else if (params.get("hash") == null)
 	        	{
-	        		System.out.println("GameId not found.");
+	        		System.out.println("Hash not found.");
 	        		sendFail("hash not found", t);
 	        	}
 	        	else
@@ -304,6 +303,13 @@ public class Server {
 	        		for (int i = 0; i<ops.length; i++)
 	        		{
 	        			ops[i] = 'n';
+	        		}
+	        		
+	        		if (DBManager.playerExists(gameId, nick))
+	        		{
+	        			String response = "Nickname "+nick+" already exists in game "+gameId;
+	        			Server.sendResponse(211, response, t);
+	        			return;
 	        		}
 	        		
 	        		if (DBManager.writePoints(nick, gameId, points, ops))
@@ -352,12 +358,12 @@ public class Server {
         	}
         	else if (params.get("opinions") == null)
         	{
-        		System.out.println("GameId not found.");
+        		System.out.println("Opinions not found.");
         		sendFail("opinions not found", t);
         	}
         	else if (params.get("hash") == null)
         	{
-        		System.out.println("GameId not found.");
+        		System.out.println("Hash not found.");
         		sendFail("hash not found", t);
         	}
         	else
@@ -478,7 +484,7 @@ public class Server {
         	    }
         	    s = buffer.toString();
         	    
-        	    if (new File("./games/"+s).isDirectory())
+        	    if (DBManager.gameExists(s))
         	    	s = "";
         	}
         	

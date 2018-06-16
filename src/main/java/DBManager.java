@@ -90,6 +90,22 @@ public class DBManager {
 		}
 	}
 	
+	public static boolean playerExists(String gameId, String nick)
+	{
+		try {
+			Statement smt = dbConnection.createStatement();
+			String query = "SELECT * "
+					+ "FROM player_points "
+					+ "WHERE gameid='"+gameId+"' "
+					+ "AND nickname='"+nick+"'";
+			ResultSet rs = smt.executeQuery(query);
+			return rs.next();
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return false;
+		}
+	}
+	
 	public static boolean writeGame(String gameId)
 	{
 		if (gameExists(gameId)) return true;

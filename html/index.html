@@ -13,7 +13,7 @@
 <button onclick="createNewGame()">Neues Spiel</button>
 
 <h2>Spielstand abfragen</h2>
-<input type="text" id="inputGameId" placeholder="Spiel-ID">
+<input type="text" id="inputGameId" placeholder="Spiel-ID" onkeydown="if (event.keyCode == 13) { requestGameStats() }">
 <button onclick="requestGameStats()">OK</button>
 
 <p id="errorText"></p>
